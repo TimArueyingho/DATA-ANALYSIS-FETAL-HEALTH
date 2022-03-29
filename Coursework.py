@@ -74,8 +74,6 @@ view(b)
 from pandas_profiling import ProfileReport
 import pandas_profiling as pdp
 
-# https://pandas-profiling.github.io/pandas-profiling/docs/master/rtd/pages/advanced_usage.html
-
 PROF = ProfileReport(fetal_health, title='Profiling Report of data', minimal=True, progress_bar=False,
                      missing_diagrams={
                          'heatmap': False,
