@@ -140,7 +140,7 @@ def model_tests(X_train, X_test,y_train,y_test):
         for i in range(3):
             acc = cm[i,i]/np.sum(cm[:,i])
             class_accuracies.append(acc)
-        print(f"Class accuracies: Normal {class_accuracies[0]}, Suspect {class_accuracies[1]}, Pathological {class_accuracies[2]}")
+        print(f"Class accuracies: Normal {class_accuracies[0]}, Suspect {class_accuracies[1]}, Pathological {class_accuracies[2]}\n")
 
                                   
 #UNBALANCED DATA MODELLING
@@ -161,8 +161,21 @@ model_tests(X_train, X_test, y_train, y_test)
 
 # UNDERBALANCED STRATEGY
 
+a= data.drop('fetal_health', axis=1)
+
+b= data.fetal_health
+
+US= RandomUnderSampler(random_state= 12, sampling_strategy="auto")
+X, y = US.fit_resample(data.drop(columns=["fetal_health"]), data["fetal_health"])
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=40)
+
+print(f"\n>>>Over sampling initial results")
+model_tests(X_train, X_test, y_train, y_test)
+
+
 #HYBRID BALANCED STRATEGY
-OS = RandomOverSampler(sampling_strategy={2:800, 3:800})
+OS = RandomOverSampler(random_state = 12 ,sampling_strategy={2:800, 3:800})
 X, y = OS.fit_resample(data.drop(columns=["fetal_health"]), data["fetal_health"])
 
 US = RandomUnderSampler(sampling_strategy={1:800})
