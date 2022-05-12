@@ -15,7 +15,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score, roc_auc_score, confusion_matrix, classification_report
+from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score, roc_auc_score, confusion_matrix, classification_report, ConfusionMatrixDisplay
 from sklearn.preprocessing import StandardScaler, RobustScaler
 from imblearn.over_sampling import RandomOverSampler
 from imblearn.under_sampling import RandomUnderSampler
@@ -26,11 +26,10 @@ from yellowbrick.features import FeatureImportances
 
 data = pd.read_excel(r"C:\Users\User\Documents\Digital Health\Data analysis for health\Coursework\fetal_health.xlsx")
 
-data.describe()
-data.isnull().values.any() 
-#There are no null values
+describe = data.describe()
+data.isnull().values.any() #There are no null values
 
-fig = plt.pie(data.fetal_health.value_counts(), labels = ["Normal", "Suspect", "Pathological"])
+fig = plt.pie(data.fetal_health.value_counts(), labels = ["Normal", "Suspect", "Pathological"], autopct="%1.1f%%", colors=["darkturquoise","cornflowerblue","mediumpurple"] )
 
 data.corr()
 plt.figure(figsize=(20,10))
@@ -51,15 +50,19 @@ plt.show()
 
 plt.figure()
 violin1 = sn.violinplot(x=data.fetal_health, y=data.prolongued_decelerations, data=data)
-#Shows the distribution of prolongued decelerations is wider in pathological outcomes than in normal or suspect outcomes
+#Shows the distribution of prolongued decelerations is wider in pathological outcomes than in normal or suspect outcomes. 
+#Median is similar for normal and suspect class = 0.000, and slightly higher for pathological = 0.001
 plt.figure()
 violin2 = sn.violinplot(x=data.fetal_health, y=data.abnormal_short_term_variability, data=data)
-#The median abonormal short_term_var is lower than that in suspect and pathological outcomes.
+#The median abonormal short_term_var is lower in normal class (40) than that in suspect and pathological outcomes (~60).
 plt.figure()
 violin3 = sn.violinplot(x=data.fetal_health, y=data.percentage_of_time_with_abnormal_long_term_variability, data=data)
 plt.figure()
+#Large density of percentage time with abnormal long term variability is around 0 for class 1 but the median is very similar for normal and pathological classes (med=0). 
+#For suspect the median is around 30
 violin4 = sn.violinplot(x=data.fetal_health, y=data.accelerations, data=data)
-#Suspect and pathological tended to have fewer accerlerations than normal
+#Suspect and pathological tended to have fewer accerlerations than normal - median 0.000 - with data focussed here. 
+#Normal class has a wider range of accelerations with median roughly 0.025.
 
 # PROF = ProfileReport(data, title='Profiling Report of data', minimal=True, progress_bar=False,
 #                      missing_diagrams={
@@ -107,41 +110,31 @@ plt.show()
 #Next, we test 2 models with unbalanced, underbalanced, overbalanced and hybrid balanced data to choose the best strategy going forward
 
 #Unbalanced testing
-normal = data[data.fetal_health == 1]
-suspect = data[data.fetal_health == 2]
-pathological = data[data.fetal_health == 3]
 
 def model_tests(X_train, X_test,y_train,y_test):
     models = {"KNeighborsClassifier":KNeighborsClassifier(), "GaussianNaiveBayes": GaussianNB(), "DecisionTree": DecisionTreeClassifier(random_state=20), "RandomForest": RandomForestClassifier(random_state=20)}
     for named, model in models.items():
         mod = model.fit(X_train, y_train)
         ypred = mod.predict(X_test)
-        accuracy = accuracy_score(y_test, ypred)
-        precision = precision_score(y_test, ypred, average="micro")
-        recall = recall_score(y_test, ypred, average="micro")
-        f1score = f1_score(y_test, ypred, average="micro")
+        accuracy = round((accuracy_score(y_test, ypred)),2)
+        precision = round((precision_score(y_test, ypred, average="micro")),2)
+        recall = round((recall_score(y_test, ypred, average="micro")),2)
+        f1score = round((f1_score(y_test, ypred, average="micro")),2)
             
         print(f"Accuracy for {named}: {accuracy}")
-        print(f"Precision for {named}: {precision}")
-        print(f"Recall for {named}: {recall}")
-        print(f"F1 score for {named}: {f1score}")
+        print(f"Micro precision for {named}: {precision}")
+        print(f"Micro Recall for {named}: {recall}")
+        print(f"Micro F1 score for {named}: {f1score}")
         
         p_hat = mod.predict_proba(X_test)
-        roc = roc_auc_score(y_test, p_hat, multi_class="ovr")
+        roc = round((roc_auc_score(y_test, p_hat, multi_class="ovr")),2)
         print(f"ROC AUC score for {named}: {roc}\n")
         
         #precision, recall, f1 scores per class
-        class_report = classification_report(y_test, ypred)
+        class_report = classification_report(y_test, ypred, labels=[1,2,3], target_names=["Normal", "Suspect", "Pathological"])
+        print(f"Classification report by class for {named}")
         print(class_report)
         
-        #accuracy per class
-        cm = confusion_matrix(y_test, ypred)
-        class_accuracies =[]
-        for i in range(3):
-            acc = cm[i,i]/np.sum(cm[:,i])
-            class_accuracies.append(acc)
-        print(f"Class accuracies: Normal {class_accuracies[0]}, Suspect {class_accuracies[1]}, Pathological {class_accuracies[2]}\n")
-
                                   
 #UNBALANCED DATA MODELLING
 #To create a representative train/test split, split each of the above classes into respective train and test sets.
@@ -161,16 +154,12 @@ model_tests(X_train, X_test, y_train, y_test)
 
 # UNDERBALANCED STRATEGY
 
-a= data.drop('fetal_health', axis=1)
-
-b= data.fetal_health
-
 US= RandomUnderSampler(random_state= 12, sampling_strategy="auto")
 X, y = US.fit_resample(data.drop(columns=["fetal_health"]), data["fetal_health"])
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=40)
 
-print(f"\n>>>Over sampling initial results")
+print(f"\n>>>Under sampling initial results")
 model_tests(X_train, X_test, y_train, y_test)
 
 
@@ -231,6 +220,8 @@ plt.legend(loc='best')
 plt.title("Explained Variance Ratio by each principal component")
 plt.show()
 
+#8 Primary components give EVR greater than 0.8.
+
 def component_data(X_train, X_test):
     sc = StandardScaler()
     scaled_X_train, scaled_X_test = sc.fit_transform(X_train), sc.fit_transform(X_test)
@@ -268,8 +259,8 @@ for named, model in models.items():
 
     #generating scores 
         accuracyscores.append(accuracy_score(y_test, ypred))
-        precisionscores.append(precision_score(y_test, ypred, average = 'macro'))
-        recallscores.append(recall_score(y_test, ypred, average = 'macro'))
+        precisionscores.append(precision_score(y_test, ypred, average = 'micro'))
+        recallscores.append(recall_score(y_test, ypred, average = 'micro'))
     
     plt.figure()
     x = list(range(5,16))
@@ -296,7 +287,7 @@ dictionary = {}
 for columns, values in sorted (zip(X_train.columns, model.feature_importances_), key = lambda x: x[1], reverse = True):
     dictionary [columns] = values
 
-importance_dataframe = pd.DataFrame({'Feature':dictionary.keys(),'Importance':dictionary.values()})
+importance_dataframe = pd.DataFrame({'Feature':dictionary.keys(),'Importance':dictionary.values()}, index=X_train.columns)
 
 #Visualise
 fig , ax = plt.subplots(figsize=(10,8))
@@ -305,17 +296,19 @@ tree.fit(X_train, y_train)
 #fig.savefig('Important features.png',dpi=300)
 plt.show()
 
-five_best_features = data[['histogram_mean', 'mean_value_of_short_term_variability', 'percentage_of_time_with_abnormal_long_term_variability', 
+#Data not scaled as scaled data performed worse except for KNN
+
+five_best_features = X[['histogram_mean', 'mean_value_of_short_term_variability', 'percentage_of_time_with_abnormal_long_term_variability', 
     'abnormal_short_term_variability', 'accelerations']]
 
-fivefeat_train, fivefeat_test, y_train, y_test = train_test_split(five_best_features,data.fetal_health, test_size = 0.2, shuffle = True, random_state = 10)
+fivefeat_train, fivefeat_test, y_train, y_test = train_test_split(five_best_features, y, test_size = 0.2,random_state = 40)
 print(f"\n >>> Results for 5 best features, NO PCA")
 model_tests(fivefeat_train, fivefeat_test, y_train, y_test)
 
-ten_best_features = data[['histogram_mean', 'mean_value_of_short_term_variability', 'percentage_of_time_with_abnormal_long_term_variability', 
-   'abnormal_short_term_variability', 'accelerations', 	'prolongued_decelerations', 'histogram_median', 'histogram_mode', 'baseline value','uterine_contractions']]
+ten_best_features = X[['histogram_mean', 'mean_value_of_short_term_variability', 'percentage_of_time_with_abnormal_long_term_variability', 
+   'abnormal_short_term_variability', 'accelerations', 	'prolongued_decelerations', 'histogram_mode', 'histogram_width','histogram_max', 'histogram_min']]
 
-tenfeat_train, tenfeat_test, y_train, y_test = train_test_split(ten_best_features,data.fetal_health, test_size = 0.2, shuffle = True, random_state = 40)
+tenfeat_train, tenfeat_test, y_train, y_test = train_test_split(ten_best_features,y, test_size = 0.2, random_state = 40)
 
 print(f"\n >>> Results for 10 best features, NO PCA")
 model_tests(tenfeat_train, tenfeat_test, y_train, y_test)
@@ -338,6 +331,8 @@ for columns, values in sorted (zip(pc_dataframe_Xtrain.columns, model.feature_im
     dictionary [columns] = values
 
 pca_importance_dataframe = pd.DataFrame({'Feature':dictionary.keys(),'Importance':dictionary.values()})
+#Visualise
+
 
 three_best_PCAfeatures_train = pc_dataframe_Xtrain[["PC1", "PC2","PC3"]]
 three_best_PCAfeatures_test = pc_dataframe_Xtest[["PC1", "PC2","PC3"]]
@@ -366,22 +361,22 @@ tree.fit(X_train, y_train)
 plt.show()
 
 #select the five best features
-rf_5best_features = data[['abnormal_short_term_variability', 'percentage_of_time_with_abnormal_long_term_variability', 
+rf_5best_features = X[['abnormal_short_term_variability', 'percentage_of_time_with_abnormal_long_term_variability', 
    'histogram_mean', 'histogram_median','accelerations']]
 
 #split new dataset into training and testing sets
-rf_5besttrain, rf_5besttest, y_train, y_test = train_test_split(rf_5best_features,data.fetal_health, test_size = 0.2, shuffle = True, random_state = 40)
+rf_5besttrain, rf_5besttest, y_train, y_test = train_test_split(rf_5best_features,y, test_size = 0.2, shuffle = True, random_state = 40)
 
 print(f"\n>>> Results using RF's best 5 features, No PCA")
 model_tests(rf_5besttrain, rf_5besttest, y_train, y_test)
 #DTC slightly better with DTC's top 10 features worse than DTC top 5
 
 
-rf_10best_features = data[['abnormal_short_term_variability', 'percentage_of_time_with_abnormal_long_term_variability', 
+rf_10best_features = X[['abnormal_short_term_variability', 'percentage_of_time_with_abnormal_long_term_variability', 
    'histogram_mean', 'histogram_median','accelerations', 'mean_value_of_short_term_variability', 'mean_value_of_long_term_variability', 'histogram_mode','baseline value','prolongued_decelerations']]
 
 #split new dataset into training and testing sets
-rf_10besttrain, rf_10besttest, y_train, y_test = train_test_split(rf_5best_features,data.fetal_health, test_size = 0.2, shuffle = True, random_state = 40)
+rf_10besttrain, rf_10besttest, y_train, y_test = train_test_split(rf_10best_features,y, test_size = 0.2, shuffle = True, random_state = 40)
 
 print(f"\n>>> Results using RF's best 5 features, No PCA")
 model_tests(rf_10besttrain, rf_10besttest, y_train, y_test)
