@@ -21,6 +21,7 @@ from imblearn.over_sampling import RandomOverSampler
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.decomposition import PCA
 from yellowbrick.features import FeatureImportances
+from matplotlib import rcParams as rcp
 #from pandas_profiling import ProfileReport
 
 
@@ -94,6 +95,14 @@ for all, column in enumerate(data.columns):
 
 plt.savefig('Boxplots of all variables.png')
 plt.tight_layout()
+plt.show()
+
+#shows differing ranges of features
+fig, ax = plt.subplots(figsize=(40,20))
+sn.boxplot(data=data.drop(columns=["fetal_health"]))
+ax.tick_params(axis='both', which='major', labelsize=30)
+plt.xticks(rotation=90)
+plt.ylabel("range", fontsize=40)
 plt.show()
 
 # In[71]:
@@ -188,7 +197,7 @@ model_tests(X_train, X_test, y_train, y_test)
 
 #FIRST SCALE THE X DATA 
 def scale(X_train, X_test):
-    sc = RobustScaler()
+    sc = StandardScaler()
     scaled_X_train, scaled_X_test = sc.fit_transform(X_train), sc.fit_transform(X_test)
     scaled_X_train = pd.DataFrame(scaled_X_train, columns = X_train.columns, index=X_train.index)
     scaled_X_test = pd.DataFrame(scaled_X_test, columns = X_test.columns, index=X_test.index)
@@ -199,22 +208,29 @@ print(f"\n >>> Results for scaled data")
 model_tests(scaled_X_train, scaled_X_test, y_train, y_test)
 #This improves model performance for KNN and GNB but not DTR and RFR actually!
 
+#Shows original data when scaled
+fig, ax = plt.subplots(figsize=(40,20))
+sn.boxplot(data=StandardScaler().fit_transform(data.drop(columns=["fetal_health"])))
+ax.tick_params(axis='both', which='major', labelsize=30)
+plt.xticks(ticks=range(0,21), labels=data.drop(columns=["fetal_health"]).columns, rotation=90)
+plt.ylabel("range", fontsize=40)
+plt.show()
+
 
 # SECOND ENGINEERING PCA 
-pca = PCA(n_components=12)
-X_pca = pca.fit_transform(StandardScaler().fit_transform(X_train))
+pca = PCA(n_components=21)
+X_pca = pca.fit_transform(scaled_X_train)
 explained_variance_ratio = pca.explained_variance_ratio_
 cum_sum_eigenvalues = np.cumsum(explained_variance_ratio)
 #
 # Create the visualization plot
 #
-plt.figure(dpi=128)
-bars = ('PC1', 'PC2', 'PC3', 'PC4', 'PC5', 'PC6', 'PC7', 'PC8','PC9','PC10','PC11','PC12')
+plt.figure(dpi=128,figsize=(20,10))
+bars = ('PC1', 'PC2', 'PC3', 'PC4', 'PC5', 'PC6', 'PC7', 'PC8','PC9','PC10','PC11','PC12',"PC13","PC14","PC15","PC16","PC17","PC18","PC19","PC20","PC21")
 x_pos = np.arange(len(bars))
-
 plt.bar(range(0,len(explained_variance_ratio)), explained_variance_ratio, align='center', label='Individual')
 plt.step(range(0,len(cum_sum_eigenvalues)), cum_sum_eigenvalues, where='mid',label='Cumulative',color = 'orange')
-plt.ylabel('Explained variance ratio')
+plt.ylabel('Explained variance ratio', fontsize=20)
 plt.xticks(x_pos, bars)
 plt.legend(loc='best')
 plt.title("Explained Variance Ratio by each principal component")
