@@ -9,7 +9,7 @@ import seaborn as sn
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import LabelEncoder
 from collections import Counter
-from sklearn.model_selection import train_test_split, KFold
+from sklearn.model_selection import train_test_split, KFold, GridSearchCV
 from sklearn.feature_selection import SequentialFeatureSelector
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
@@ -22,6 +22,7 @@ from imblearn.under_sampling import RandomUnderSampler
 from sklearn.decomposition import PCA
 from yellowbrick.features import FeatureImportances
 from matplotlib import rcParams as rcp
+
 #from pandas_profiling import ProfileReport
 
 
@@ -126,14 +127,14 @@ def model_tests(X_train, X_test,y_train,y_test):
         mod = model.fit(X_train, y_train)
         ypred = mod.predict(X_test)
         accuracy = round((accuracy_score(y_test, ypred)),2)
-        precision = round((precision_score(y_test, ypred, average="weighted")),2)
-        recall = round((recall_score(y_test, ypred, average="weighted")),2)
-        f1score = round((f1_score(y_test, ypred, average="weighted")),2)
+        precision = round((precision_score(y_test, ypred, average="macro")),2)
+        recall = round((recall_score(y_test, ypred, average="macro")),2)
+        f1score = round((f1_score(y_test, ypred, average="macro")),2)
             
         print(f"Accuracy for {named}: {accuracy}")
-        print(f"Weighted precision for {named}: {precision}")
-        print(f"Weighted Recall for {named}: {recall}")
-        print(f"Weighted F1 score for {named}: {f1score}")
+        print(f"Macro precision for {named}: {precision}")
+        print(f"Macro Recall for {named}: {recall}")
+        print(f"Macro F1 score for {named}: {f1score}")
         
         # p_hat = mod.predict_proba(X_test)
         # roc = round((roc_auc_score(y_test, p_hat, multi_class="ovr")),2)
@@ -159,7 +160,30 @@ test_data = pd.concat([normal_test, suspect_test, pathological_test], ignore_ind
 X_train, X_test, y_train, y_test = training_data.drop(columns = ["fetal_health"]), test_data.drop(columns = ["fetal_health"]), training_data.fetal_health, test_data.fetal_health
 
 print(f"\n >>>Unbalanced dataset, initial tests")
-model_tests(X_train, X_test, y_train, y_test)
+
+models = {"KNeighborsClassifier":KNeighborsClassifier(), "GaussianNaiveBayes": GaussianNB(), "DecisionTree": DecisionTreeClassifier(random_state=10), "RandomForest": RandomForestClassifier(random_state=10)}
+for named, model in models.items():
+    mod = model.fit(X_train, y_train)
+    ypred = mod.predict(X_test)
+    accuracy = round((accuracy_score(y_test, ypred)),2)
+    precision = round((precision_score(y_test, ypred, average="weighted")),2)
+    recall = round((recall_score(y_test, ypred, average="weighted")),2)
+    f1score = round((f1_score(y_test, ypred, average="weighted")),2)
+        
+    print(f"Accuracy for {named}: {accuracy}")
+    print(f"Weighted precision for {named}: {precision}")
+    print(f"Weighted Recall for {named}: {recall}")
+    print(f"Weighted F1 score for {named}: {f1score}")
+    
+    # p_hat = mod.predict_proba(X_test)
+    # roc = round((roc_auc_score(y_test, p_hat, multi_class="ovr")),2)
+    # print(f"ROC AUC score for {named}: {roc}\n")
+    
+    #precision, recall, f1 scores per class
+    class_report = classification_report(y_test, ypred, labels=[1,2,3], target_names=["Normal", "Suspect", "Pathological"])
+    print(f"Classification report by class for {named}")
+    print(class_report)
+
 
 # UNDERBALANCED STRATEGY
 
@@ -196,7 +220,7 @@ model_tests(X_train, X_test, y_train, y_test)
 
 #FIRST SCALE THE X DATA 
 def scale(X_train, X_test):
-    sc = StandardScaler()
+    sc = RobustScaler()
     scaled_X_train = sc.fit_transform(X_train)
     scaled_X_test = sc.transform(X_test)
     scaled_X_train = pd.DataFrame(scaled_X_train, columns = X_train.columns, index=X_train.index)
@@ -210,43 +234,11 @@ model_tests(scaled_X_train, scaled_X_test, y_train, y_test)
 
 #Shows original data when scaled
 fig, ax = plt.subplots(figsize=(40,20))
-sn.boxplot(data=StandardScaler().fit_transform(data.drop(columns=["fetal_health"])))
+sn.boxplot(data=RobustScaler().fit_transform(data.drop(columns=["fetal_health"])))
 ax.tick_params(axis='both', which='major', labelsize=30)
 plt.xticks(ticks=range(0,21), labels=data.drop(columns=["fetal_health"]).columns, rotation=90)
 plt.ylabel("range", fontsize=40)
 plt.show()
-
-
-# SECOND ENGINEERING PCA 
-pca = PCA(n_components=21)
-X_pca = pca.fit_transform(scaled_X_train)
-explained_variance_ratio = pca.explained_variance_ratio_
-cum_sum_eigenvalues = np.cumsum(explained_variance_ratio)
-#
-# Create the visualization plot
-#
-plt.figure(dpi=128,figsize=(20,10))
-bars = ('PC1', 'PC2', 'PC3', 'PC4', 'PC5', 'PC6', 'PC7', 'PC8','PC9','PC10','PC11','PC12',"PC13","PC14","PC15","PC16","PC17","PC18","PC19","PC20","PC21")
-x_pos = np.arange(len(bars))
-plt.bar(range(0,len(explained_variance_ratio)), explained_variance_ratio, align='center', label='Individual')
-plt.step(range(0,len(cum_sum_eigenvalues)), cum_sum_eigenvalues, where='mid',label='Cumulative',color = 'orange')
-plt.ylabel('Explained variance ratio', fontsize=20)
-plt.xticks(x_pos, bars)
-plt.legend(loc='best')
-plt.title("Explained Variance Ratio by each principal component")
-plt.show()
-
-#8 Primary components give EVR greater than 0.8.
-
-def component_data(X_train, X_test):
-    pca = PCA(n_components=8)
-    X_trainpc = pca.fit_transform(scaled_X_train)
-    X_testpc = pca.transform(scaled_X_test)
-    return X_trainpc, X_testpc
-
-X_trainpc, X_testpc = component_data(X_train, X_test)
-print(f"\n>>> PCA results: 8 components with standard scaler data")
-model_tests(X_trainpc, X_testpc, y_train, y_test)
 
 # FEATURE SELECTION
 
@@ -258,7 +250,7 @@ for named, model in models.items():
     recallscores= []
     f1scores = []
     for i in range(5, 21):
-    #sequential feature selection for knn and gnb, selecting 15 best features
+    #sequential feature selection for knn and gnb, selecting i best features
         sfs = SequentialFeatureSelector(model, n_features_to_select=i)
         sfs.fit(scaled_X_train, y_train)
 
@@ -275,6 +267,9 @@ for named, model in models.items():
         precisionscores.append(precision_score(y_test, ypred, average = 'weighted'))
         recallscores.append(recall_score(y_test, ypred, average = 'weighted'))
         f1scores.append(f1_score(y_test, ypred, average="weighted"))
+        
+        print(f"Results for {named} using {i} features ")
+        model_tests(Xtraintemp, Xtesttemp, y_train, ypred)
         
     plt.figure()
     x = list(range(5,21))
@@ -370,3 +365,53 @@ print(f"\n>>> Results using RF's best 10 features, No PCA")
 model_tests(rf_10besttrain, rf_10besttest, y_train, y_test)
 
 #RFR top 10 better for KNN, GNB, similar for DTC except ROC and slightly loweer than top 10 from DTC importances
+
+
+## Hyperparameter tuning for KNN
+
+n_neighbors = list(range(1,11))
+weights = ['uniform', 'distance']
+leaf_size = list(range(1,5))
+p = [1,2]
+
+params_knn = dict(n_neighbors=n_neighbors, weights=weights, leaf_size=leaf_size, p=p)
+
+knn_grid_search = GridSearchCV(estimator = KNeighborsClassifier(), param_grid = params_knn, scoring = 'accuracy')
+knn_grid_search.fit(scaled_X_train, y_train)
+
+print(knn_grid_search.best_params_)
+print(f"\n >>> Results for optimised KNN")
+model_tests(scaled_X_train, scaled_X_test, y_train, knn_y_pred)
+
+print("--------------------")
+#Hyperparameter tuning with GNB
+#The only hyperparameter in gnb is var_smoothing- default value is  10^−9
+#conduct the grid search in the "logspace"
+
+params_gnb= {"var_smoothing":[1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1e-10, 1e-11, 1e-12, 1e-13, 1e-14, 1e-15] }
+
+#grid search was used to tune the hyperparameters
+
+gnb_grid_search=GridSearchCV(estimator=GaussianNB().fit(X_train, y_train),param_grid=params_gnb,scoring='accuracy',verbose=1, cv=3, error_score='raise')
+#fit gridsearch to model
+gnb_grid_search.fit(X_train,y_train)
+#find the best var_smoothing
+print(gnb_grid_search.best_params_)
+
+best_gnb=GaussianNB(var_smoothing=1e-10)
+#fit the best parameter 
+best_gnb_model=best_gnb.fit(X_train, y_train)
+best_y_pred= best_gnb_model.predict(X_test)
+
+print(f"\n >>> Results for optimised GNB")
+model_tests(scaled_X_train, scaled_X_test, y_train, best_y_pred)
+
+print(f"Accuracy for tuned GNB model : {accuracy_score (y_test, best_y_pred)}") 
+print(f"Precision for tuned GNB model: {precision_score (y_test, best_y_pred, average= 'micro')}")
+print(f"Recall for tuned GNB model : {recall_score(y_test, best_y_pred, average= 'micro')}")
+
+#accuracy before 0.7541666666666667 vs after 0.7774420946626385
+#precision before 0.7541666666666667 vs after 0.0.77744209466263857
+#Recall  before 0.7541666666666667 vs after 0.7774420946626385
+
+#2% increase post tuning
