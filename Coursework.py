@@ -126,18 +126,18 @@ def model_tests(X_train, X_test,y_train,y_test):
         mod = model.fit(X_train, y_train)
         ypred = mod.predict(X_test)
         accuracy = round((accuracy_score(y_test, ypred)),2)
-        precision = round((precision_score(y_test, ypred, average="micro")),2)
-        recall = round((recall_score(y_test, ypred, average="micro")),2)
-        f1score = round((f1_score(y_test, ypred, average="micro")),2)
+        precision = round((precision_score(y_test, ypred, average="weighted")),2)
+        recall = round((recall_score(y_test, ypred, average="weighted")),2)
+        f1score = round((f1_score(y_test, ypred, average="weighted")),2)
             
         print(f"Accuracy for {named}: {accuracy}")
-        print(f"Micro precision for {named}: {precision}")
-        print(f"Micro Recall for {named}: {recall}")
-        print(f"Micro F1 score for {named}: {f1score}")
+        print(f"Weighted precision for {named}: {precision}")
+        print(f"Weighted Recall for {named}: {recall}")
+        print(f"Weighted F1 score for {named}: {f1score}")
         
-        p_hat = mod.predict_proba(X_test)
-        roc = round((roc_auc_score(y_test, p_hat, multi_class="ovr")),2)
-        print(f"ROC AUC score for {named}: {roc}\n")
+        # p_hat = mod.predict_proba(X_test)
+        # roc = round((roc_auc_score(y_test, p_hat, multi_class="ovr")),2)
+        # print(f"ROC AUC score for {named}: {roc}\n")
         
         #precision, recall, f1 scores per class
         class_report = classification_report(y_test, ypred, labels=[1,2,3], target_names=["Normal", "Suspect", "Pathological"])
@@ -176,7 +176,7 @@ model_tests(X_train, X_test, y_train, y_test)
 OS = RandomOverSampler(random_state = 12 ,sampling_strategy={2:800, 3:800})
 X, y = OS.fit_resample(data.drop(columns=["fetal_health"]), data["fetal_health"])
 
-US = RandomUnderSampler(sampling_strategy={1:800})
+US = RandomUnderSampler(random_state = 12, sampling_strategy={1:800})
 X, y = US.fit_resample(X, y)
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=40)
@@ -189,7 +189,6 @@ OS = RandomOverSampler(sampling_strategy={2:1655, 3:1655}, random_state=40)
 X, y = OS.fit_resample(data.drop(columns=["fetal_health"]), data["fetal_health"])
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=40)
-
 print(f"\n>>>Over sampling initial results")
 model_tests(X_train, X_test, y_train, y_test)
 
@@ -198,7 +197,8 @@ model_tests(X_train, X_test, y_train, y_test)
 #FIRST SCALE THE X DATA 
 def scale(X_train, X_test):
     sc = StandardScaler()
-    scaled_X_train, scaled_X_test = sc.fit_transform(X_train), sc.fit_transform(X_test)
+    scaled_X_train = sc.fit_transform(X_train)
+    scaled_X_test = sc.transform(X_test)
     scaled_X_train = pd.DataFrame(scaled_X_train, columns = X_train.columns, index=X_train.index)
     scaled_X_test = pd.DataFrame(scaled_X_test, columns = X_test.columns, index=X_test.index)
     return scaled_X_train, scaled_X_test
@@ -239,13 +239,9 @@ plt.show()
 #8 Primary components give EVR greater than 0.8.
 
 def component_data(X_train, X_test):
-    sc = StandardScaler()
-    scaled_X_train, scaled_X_test = sc.fit_transform(X_train), sc.fit_transform(X_test)
-    scaled_X_train = pd.DataFrame(scaled_X_train, columns = X_train.columns, index=X_train.index)
-    scaled_X_test = pd.DataFrame(scaled_X_test, columns = X_test.columns, index=X_test.index)
     pca = PCA(n_components=8)
     X_trainpc = pca.fit_transform(scaled_X_train)
-    X_testpc = pca.fit_transform(scaled_X_test)
+    X_testpc = pca.transform(scaled_X_test)
     return X_trainpc, X_testpc
 
 X_trainpc, X_testpc = component_data(X_train, X_test)
@@ -260,10 +256,11 @@ for named, model in models.items():
     accuracyscores = []
     precisionscores = []
     recallscores= []
-    for i in range(5, 16):
+    f1scores = []
+    for i in range(5, 21):
     #sequential feature selection for knn and gnb, selecting 15 best features
         sfs = SequentialFeatureSelector(model, n_features_to_select=i)
-        sfs.fit(X, y)
+        sfs.fit(scaled_X_train, y_train)
 
     #transforming the training set and test set to be restricted to the selected number of features
         Xtraintemp = sfs.transform(X_train)
@@ -275,14 +272,16 @@ for named, model in models.items():
 
     #generating scores 
         accuracyscores.append(accuracy_score(y_test, ypred))
-        precisionscores.append(precision_score(y_test, ypred, average = 'micro'))
-        recallscores.append(recall_score(y_test, ypred, average = 'micro'))
-    
+        precisionscores.append(precision_score(y_test, ypred, average = 'weighted'))
+        recallscores.append(recall_score(y_test, ypred, average = 'weighted'))
+        f1scores.append(f1_score(y_test, ypred, average="weighted"))
+        
     plt.figure()
-    x = list(range(5,16))
+    x = list(range(5,21))
     plt.plot(x,accuracyscores, label = 'accuracy scores')
     plt.plot(x,precisionscores, label = 'precision scores')
     plt.plot(x, recallscores, label = 'recall scores')
+    plt.plot(x, f1scores, label = 'F1 scores')
     plt.xlabel('number of features used')
     plt.xticks(x)
     plt.title(f'Changes features used in {named}')
@@ -303,7 +302,7 @@ dictionary = {}
 for columns, values in sorted (zip(X_train.columns, model.feature_importances_), key = lambda x: x[1], reverse = True):
     dictionary [columns] = values
 
-importance_dataframe = pd.DataFrame({'Feature':dictionary.keys(),'Importance':dictionary.values()}, index=X_train.columns)
+importance_dataframe = pd.DataFrame({'Feature':dictionary.keys(),'Importance':dictionary.values()})
 
 #Visualise
 fig , ax = plt.subplots(figsize=(10,8))
@@ -322,7 +321,7 @@ print(f"\n >>> Results for 5 best features, NO PCA")
 model_tests(fivefeat_train, fivefeat_test, y_train, y_test)
 
 ten_best_features = X[['histogram_mean', 'mean_value_of_short_term_variability', 'percentage_of_time_with_abnormal_long_term_variability', 
-   'abnormal_short_term_variability', 'accelerations', 	'prolongued_decelerations', 'histogram_mode', 'histogram_width','histogram_max', 'histogram_min']]
+   'abnormal_short_term_variability', 'accelerations', 	'prolongued_decelerations', 'histogram_median', 'histogram_mode','baseline value', 'fetal_movement']]
 
 tenfeat_train, tenfeat_test, y_train, y_test = train_test_split(ten_best_features,y, test_size = 0.2, random_state = 40)
 
@@ -330,45 +329,19 @@ print(f"\n >>> Results for 10 best features, NO PCA")
 model_tests(tenfeat_train, tenfeat_test, y_train, y_test)
 # Top 10 features better than 5 feature
 
-#FEATURE SELECTION ON PCA
-model = DecisionTreeClassifier()
-x = model.fit(X_trainpc, y_train)
-plt.figure(figsize = (60,20))
-new = skt.plot_tree(x, filled=True)
-plt.show()
-
-#Create a dictionary of features and their importances 
-dictionary = {}
-
-pc_dataframe_Xtrain = pd.DataFrame(data=X_trainpc, columns=["PC1", "PC2","PC3","PC4","PC5","PC6","PC7","PC8"])
-pc_dataframe_Xtest = pd.DataFrame(data=X_testpc, columns=["PC1", "PC2","PC3","PC4","PC5","PC6","PC7","PC8"])
-
-for columns, values in sorted (zip(pc_dataframe_Xtrain.columns, model.feature_importances_), key = lambda x: x[1], reverse = True):
-    dictionary [columns] = values
-
-pca_importance_dataframe = pd.DataFrame({'Feature':dictionary.keys(),'Importance':dictionary.values()})
-#Visualise
-
-
-three_best_PCAfeatures_train = pc_dataframe_Xtrain[["PC1", "PC2","PC3"]]
-three_best_PCAfeatures_test = pc_dataframe_Xtest[["PC1", "PC2","PC3"]]
-
-model_tests(three_best_PCAfeatures_train, three_best_PCAfeatures_test, y_train, y_test)
-#Feature selection on 3 PCs worse
-
-five_best_PCAfeatures_train = pc_dataframe_Xtrain[["PC1", "PC2","PC3","PC5","PC6"]]
-five_best_PCAfeatures_test = pc_dataframe_Xtest[["PC1", "PC2","PC3","PC5","PC6"]]
-
-model_tests(five_best_PCAfeatures_train, five_best_PCAfeatures_test, y_train, y_test)
-#on 5 best PCs even worse
+#FEATURE SELECTION USING RF
 
 ###
 RF = RandomForestClassifier()
 rfc = RF.fit(X_train, y_train)
 
+dictionary = {}
+
+for columns, values in sorted (zip(X_train.columns, rfc.feature_importances_), key = lambda x: x[1], reverse = True):
+    dictionary [columns] = values
+
 #convert it to a dataframe
-rf_importance_dataframe = pd.DataFrame({'Feature importance':RF.feature_importances_}, index=X_train.columns)
-rf_importance_dataframe = rf_importance_dataframe.sort_values(by=["Feature importance"], axis=0, ascending=False)
+rf_importance_dataframe = pd.DataFrame({"Feature names": dictionary.keys(),'Feature importance':dictionary.values()})
 
 fig , ax = plt.subplots(figsize=(10,8))
 tree = FeatureImportances(rfc)
@@ -387,14 +360,13 @@ print(f"\n>>> Results using RF's best 5 features, No PCA")
 model_tests(rf_5besttrain, rf_5besttest, y_train, y_test)
 #DTC slightly better with DTC's top 10 features worse than DTC top 5
 
-
 rf_10best_features = X[['abnormal_short_term_variability', 'percentage_of_time_with_abnormal_long_term_variability', 
    'histogram_mean', 'histogram_median','accelerations', 'mean_value_of_short_term_variability', 'mean_value_of_long_term_variability', 'histogram_mode','baseline value','prolongued_decelerations']]
 
 #split new dataset into training and testing sets
 rf_10besttrain, rf_10besttest, y_train, y_test = train_test_split(rf_10best_features,y, test_size = 0.2, shuffle = True, random_state = 40)
 
-print(f"\n>>> Results using RF's best 5 features, No PCA")
+print(f"\n>>> Results using RF's best 10 features, No PCA")
 model_tests(rf_10besttrain, rf_10besttest, y_train, y_test)
 
 #RFR top 10 better for KNN, GNB, similar for DTC except ROC and slightly loweer than top 10 from DTC importances
