@@ -9,7 +9,7 @@ import seaborn as sn
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import LabelEncoder
 from collections import Counter
-from sklearn.model_selection import train_test_split, KFold, GridSearchCV
+from sklearn.model_selection import train_test_split, KFold, GridSearchCV, cross_validate
 from sklearn.feature_selection import SequentialFeatureSelector
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
@@ -467,6 +467,36 @@ def preprocess (data):
 X_train, X_test, y_train,y_test = preprocess(data)
 
 ## Hyperparameter tuning for KNN
+#we will use the cross_validate function to assess accuracy scores across a range of k for knn
+#number of neighbours is an important hyperparameter for knn. It is the basis for how the model makes predictions.
+#taking too few neighbours will mean our model does not fit to our data well enough,
+#while too many neighbours will result in overfitting.
+#for each value of k, we will cross-validate on 5 splits and take the mean accuracy for train and validation
+max_k = 30
+
+#we will assess models using accuracy scores, and so begin by initialising variables to store these scores
+trainacc = []
+valacc = []
+
+#we use a loop to assess the performance of the model on each split of K-fold 
+for k in range(max_k):    
+    
+    knn = KNeighborsClassifier(n_neighbors=k+1)
+    
+    scores = cross_validate(knn, X_train, y_train, cv = 5, scoring =('accuracy'), return_train_score = True)
+    
+    trainacc.append(scores['train_score'].mean())
+    valacc.append(scores['test_score'].mean())
+
+#we can visualise this output in a graph
+x = range(1, max_k+1)
+plt.plot(x, trainacc, label='Training accuracy')
+plt.plot(x, valacc, label='Validation accuracy')
+plt.legend()
+plt.xlabel('k')
+plt.ylabel('accuracy score')
+
+# Using gridsearch
 
 n_neighbors = list(range(1,11))
 weights = ['uniform', 'distance']
@@ -584,3 +614,30 @@ class_report = classification_report(y_test, ypred, labels=[1,2,3], target_names
 print(f"Classification report by class for {named}")
 print(class_report)
 
+#Cross validation to compare model performances
+scoresknn = []
+scoresgnb = []
+scoresrf = []
+
+X = RobustScaler().fit_transform(X)
+cv = KFold(n_splits=10, shuffle=True)
+for train_index, test_index in cv.split(X):
+    X_train, X_test = X[train_index], X[test_index]
+    y_train, y_test = y[train_index], y[test_index]
+    knn_grid_search.fit(X_train, y_train)
+    knn_y_pred = knn_grid_search.predict(X_test)
+    best_gnb_model=best_gnb.fit(X_train, y_train)
+    gnb_pred= best_gnb_model.predict(X_test)
+    rf_model.fit(X_train, y_train)
+    rf_pred = rf_model.predict(X_test)
+    scoresknn.append(accuracy_score(y_test,knn_y_pred))
+    scoresgnb.append(accuracy_score(y_test,gnb_pred))
+    scoresrf.append(accuracy_score(y_test, rf_pred))
+
+print(f'KNN: mean={np.mean(scoresknn)}, sd={np.std(scoresknn)}')
+print(f'GNB: mean={np.mean(scoresgnb)},sd={np.std(scoresgnb)}')
+print(f'RF: mean={np.mean(scoresrf)}, sd={np.std(scoresrf)}')
+
+box_plot_data=[scoresknn,scoresgnb,scoresrf]
+plt.boxplot(box_plot_data,labels=['KNN','GNB',"RF"])
+plt.show()
