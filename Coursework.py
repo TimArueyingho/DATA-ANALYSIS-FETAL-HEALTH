@@ -7,7 +7,6 @@ import pandas as pd
 import numpy as np 
 import seaborn as sn
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import LabelEncoder
 from collections import Counter
 from sklearn.model_selection import train_test_split, KFold, GridSearchCV, cross_validate
 from sklearn.feature_selection import SequentialFeatureSelector
@@ -117,34 +116,12 @@ plt.savefig('Piechart.png')
 plt.title('Distibution of cases')
 plt.show()
 
+plt.figure()
+plt.bar(["normal","suspect","pathological"], data.fetal_health.value_counts())
+plt.ylabel("number of examples")
 #Next, we test 2 models with unbalanced, underbalanced, overbalanced and hybrid balanced data to choose the best strategy going forward
 
-#Unbalanced testing
-
-def model_tests(X_train, X_test,y_train,y_test):
-    models = {"KNeighborsClassifier":KNeighborsClassifier(), "GaussianNaiveBayes": GaussianNB(), "DecisionTree": DecisionTreeClassifier(random_state=10), "RandomForest": RandomForestClassifier(random_state=10)}
-    for named, model in models.items():
-        mod = model.fit(X_train, y_train)
-        ypred = mod.predict(X_test)
-        accuracy = round((accuracy_score(y_test, ypred)),2)
-        precision = round((precision_score(y_test, ypred, average="macro")),2)
-        recall = round((recall_score(y_test, ypred, average="macro")),2)
-        f1score = round((f1_score(y_test, ypred, average="macro")),2)
-            
-        print(f"Accuracy for {named}: {accuracy}")
-        print(f"Macro precision for {named}: {precision}")
-        print(f"Macro Recall for {named}: {recall}")
-        print(f"Macro F1 score for {named}: {f1score}")
-        
-        # p_hat = mod.predict_proba(X_test)
-        # roc = round((roc_auc_score(y_test, p_hat, multi_class="ovr")),2)
-        # print(f"ROC AUC score for {named}: {roc}\n")
-        
-        #precision, recall, f1 scores per class
-        class_report = classification_report(y_test, ypred, labels=[1,2,3], target_names=["Normal", "Suspect", "Pathological"])
-        print(f"Classification report by class for {named}")
-        print(class_report)
-        
+#Unbalanced testing        
                                   
 #UNBALANCED DATA MODELLING
 #To create a representative train/test split, split each of the above classes into respective train and test sets.
@@ -152,69 +129,105 @@ normal_train, normal_test = train_test_split(normal, test_size=0.2, random_state
 suspect_train, suspect_test = train_test_split(suspect, test_size=0.2, random_state=41)
 pathological_train, pathological_test = train_test_split(pathological, test_size=0.2, random_state=41)
 
+#split training into train and validation.
+normal_train, normal_val = train_test_split(normal_train, test_size=0.2, random_state=41)
+suspect_train, suspect_val = train_test_split(suspect_train, test_size=0.2, random_state=41)
+pathological_train, pathological_val = train_test_split(pathological_train, test_size=0.2, random_state=41)
+
 #Then combine these into one training set and one test set.
 training_data = pd.concat([normal_train, suspect_train, pathological_train], ignore_index=True)
+val_data = pd.concat([normal_val, suspect_val, pathological_val], ignore_index=True)
 test_data = pd.concat([normal_test, suspect_test, pathological_test], ignore_index=True)
 
 #Then create the train and test X matrices and the train and test y arrays
-X_train, X_test, y_train, y_test = training_data.drop(columns = ["fetal_health"]), test_data.drop(columns = ["fetal_health"]), training_data.fetal_health, test_data.fetal_health
+X_train, X_val, X_test, y_train, y_val, y_test = training_data.drop(columns = ["fetal_health"]), val_data.drop(columns=["fetal_health"]), test_data.drop(columns = ["fetal_health"]), training_data.fetal_health, val_data.fetal_health, test_data.fetal_health
 
 print(f"\n >>>Unbalanced dataset, initial tests")
 
 models = {"KNeighborsClassifier":KNeighborsClassifier(), "GaussianNaiveBayes": GaussianNB(), "DecisionTree": DecisionTreeClassifier(random_state=10), "RandomForest": RandomForestClassifier(random_state=10)}
 for named, model in models.items():
     mod = model.fit(X_train, y_train)
-    ypred = mod.predict(X_test)
-    accuracy = round((accuracy_score(y_test, ypred)),2)
-    precision = round((precision_score(y_test, ypred, average="weighted")),2)
-    recall = round((recall_score(y_test, ypred, average="weighted")),2)
-    f1score = round((f1_score(y_test, ypred, average="weighted")),2)
+    ypred = mod.predict(X_val)
+    accuracy = round((accuracy_score(y_val, ypred)),3)
+    precision = round((precision_score(y_val, ypred, average="weighted")),3)
+    recall = round((recall_score(y_val, ypred, average="weighted")),3)
+    f1score = round((f1_score(y_val, ypred, average="weighted")),3)
         
     print(f"Accuracy for {named}: {accuracy}")
     print(f"Weighted precision for {named}: {precision}")
     print(f"Weighted Recall for {named}: {recall}")
     print(f"Weighted F1 score for {named}: {f1score}")
     
-    # p_hat = mod.predict_proba(X_test)
-    # roc = round((roc_auc_score(y_test, p_hat, multi_class="ovr")),2)
-    # print(f"ROC AUC score for {named}: {roc}\n")
-    
     #precision, recall, f1 scores per class
-    class_report = classification_report(y_test, ypred, labels=[1,2,3], target_names=["Normal", "Suspect", "Pathological"])
+    class_report = classification_report(y_val, ypred, labels=[1,2,3], target_names=["Normal", "Suspect", "Pathological"], digits=3)
     print(f"Classification report by class for {named}")
     print(class_report)
 
+def model_tests(X_train, X_test,y_train,y_test):
+    models = {"KNeighborsClassifier":KNeighborsClassifier(), "GaussianNaiveBayes": GaussianNB(), "DecisionTree": DecisionTreeClassifier(random_state=10), "RandomForest": RandomForestClassifier(random_state=10)}
+    for named, model in models.items():
+        mod = model.fit(X_train, y_train)
+        ypred = mod.predict(X_test)
+        accuracy = round((accuracy_score(y_test, ypred)),3)
+        precision = round((precision_score(y_test, ypred, average="macro")),3)
+        recall = round((recall_score(y_test, ypred, average="macro")),3)
+        f1score = round((f1_score(y_test, ypred, average="macro")),3)
+            
+        print(f"Accuracy for {named}: {accuracy}")
+        print(f"Macro precision for {named}: {precision}")
+        print(f"Macro Recall for {named}: {recall}")
+        print(f"Macro F1 score for {named}: {f1score}")
+        
+        #precision, recall, f1 scores per class
+        class_report = classification_report(y_test, ypred, labels=[1,2,3], target_names=["Normal", "Suspect", "Pathological"], digits=3)
+        print(f"Classification report by class for {named}")
+        print(class_report)
 
 # UNDERBALANCED STRATEGY
 
 US= RandomUnderSampler(random_state= 12, sampling_strategy="auto")
 X, y = US.fit_resample(data.drop(columns=["fetal_health"]), data["fetal_health"])
+plt.bar(["normal","suspect","pathological"],y.value_counts())
+plt.ylabel("number of examples")
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=40)
+X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state = 10)
 
 print(f"\n>>>Under sampling initial results")
-model_tests(X_train, X_test, y_train, y_test)
+model_tests(X_train, X_val, y_train, y_val)
+
 
 
 #HYBRID BALANCED STRATEGY
-OS = RandomOverSampler(random_state = 12 ,sampling_strategy={2:800, 3:800})
+OS = RandomOverSampler(random_state = 12, sampling_strategy={2:800, 3:800})
 X, y = OS.fit_resample(data.drop(columns=["fetal_health"]), data["fetal_health"])
 
 US = RandomUnderSampler(random_state = 12, sampling_strategy={1:800})
 X, y = US.fit_resample(X, y)
 
+plt.bar(["normal","suspect","pathological"],y.value_counts())
+plt.ylabel("number of examples")
+
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=40)
+X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state = 10)
+
 print(f"\n>>>HYBRID sampling initial results")
-model_tests(X_train, X_test, y_train, y_test)
+model_tests(X_train, X_val, y_train, y_val)
 
 #OVERBALANCED STRATEGY - brings class 2 and 3 up to same number of samples as 1
-OS = RandomOverSampler(sampling_strategy={2:1655, 3:1655}, random_state=40)
+OS = RandomOverSampler(sampling_strategy="auto", random_state=40)
 # fit and apply the transform
 X, y = OS.fit_resample(data.drop(columns=["fetal_health"]), data["fetal_health"])
+plt.bar(["normal","suspect","pathological"],y.value_counts())
+plt.ylabel("number of examples")
+
+
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=40)
+X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state = 10)
+
 print(f"\n>>>Over sampling initial results")
-model_tests(X_train, X_test, y_train, y_test)
+model_tests(X_train, X_val, y_train, y_val)
 
 # FEATURE ENGINEERING
 
@@ -222,14 +235,14 @@ model_tests(X_train, X_test, y_train, y_test)
 def scale(X_train, X_test):
     sc = RobustScaler()
     scaled_X_train = sc.fit_transform(X_train)
-    scaled_X_test = sc.transform(X_test)
+    scaled_X_val = sc.transform(X_val)
     scaled_X_train = pd.DataFrame(scaled_X_train, columns = X_train.columns, index=X_train.index)
-    scaled_X_test = pd.DataFrame(scaled_X_test, columns = X_test.columns, index=X_test.index)
-    return scaled_X_train, scaled_X_test
+    scaled_X_val = pd.DataFrame(scaled_X_val, columns = X_val.columns, index=X_val.index)
+    return scaled_X_train, scaled_X_val
 
-scaled_X_train, scaled_X_test = scale(X_train, X_test)
+scaled_X_train, scaled_X_val = scale(X_train, X_val)
 print(f"\n >>> Results for scaled data")
-model_tests(scaled_X_train, scaled_X_test, y_train, y_test)
+model_tests(scaled_X_train, scaled_X_val, y_train, y_val)
 #This improves model performance for KNN and GNB but not DTR and RFR actually!
 
 #Shows original data when scaled
@@ -239,6 +252,40 @@ ax.tick_params(axis='both', which='major', labelsize=30)
 plt.xticks(ticks=range(0,21), labels=data.drop(columns=["fetal_health"]).columns, rotation=90)
 plt.ylabel("range", fontsize=40)
 plt.show()
+
+# SECOND ENGINEERING PCA 
+pca = PCA(n_components=21)
+X_pca = pca.fit_transform(StandardScaler().fit_transform(X_train))
+explained_variance_ratio = pca.explained_variance_ratio_
+cum_sum_eigenvalues = np.cumsum(explained_variance_ratio)
+#
+# Create the visualization plot
+#
+plt.figure(dpi=128)
+bars = ('PC1', 'PC2', 'PC3', 'PC4', 'PC5', 'PC6', 'PC7', 'PC8','PC9','PC10','PC11','PC12')
+plt.figure(dpi=128,figsize=(20,10))
+bars = ('PC1', 'PC2', 'PC3', 'PC4', 'PC5', 'PC6', 'PC7', 'PC8','PC9','PC10','PC11','PC12',"PC13","PC14","PC15","PC16","PC17","PC18","PC19","PC20","PC21")
+x_pos = np.arange(len(bars))
+
+plt.bar(range(0,len(explained_variance_ratio)), explained_variance_ratio, align='center', label='Individual')
+plt.step(range(0,len(cum_sum_eigenvalues)), cum_sum_eigenvalues, where='mid',label='Cumulative',color = 'orange')
+plt.ylabel('Explained variance ratio')
+plt.ylabel('Explained variance ratio', fontsize=20)
+plt.xticks(x_pos, bars)
+plt.legend(loc='best')
+plt.title("Explained Variance Ratio by each principal component")
+plt.savefig("PCA.png")
+
+pca = PCA(n_components=8)
+ss = StandardScaler()
+ss_Xtrain = ss.fit_transform(X_train)
+ss_Xval = ss.transform(X_val)
+
+X_pca = pca.fit_transform(ss_Xtrain)
+X_valpca = pca.transform(ss_Xval)
+
+print(f"\n>>>PCA results")
+model_tests(X_pca, X_valpca, y_train, y_val)
 
 # FEATURE SELECTION
 
@@ -255,18 +302,18 @@ for named, model in models.items():
         sfs.fit(scaled_X_train, y_train)
 
     #transforming the training set and test set to be restricted to the selected number of features
-        Xtraintemp = sfs.transform(X_train)
-        Xtesttemp = sfs.transform(X_test)
+        Xtraintemp = pd.DataFrame(data=sfs.transform(scaled_X_train), columns=sfs.get_feature_names_out(), index=scaled_X_train.index)
+        Xvaltemp =pd.DataFrame(data= sfs.transform(scaled_X_val), columns=sfs.get_feature_names_out(), index=scaled_X_val.index)
 
     #fitting a knn model using the dataset containing the subset of features and making predictions
         model.fit(Xtraintemp, y_train)
-        ypred = model.predict(Xtesttemp)
+        ypred = model.predict(Xvaltemp)
 
     #generating scores 
-        accuracyscores.append(accuracy_score(y_test, ypred))
-        precisionscores.append(precision_score(y_test, ypred, average = 'macro'))
-        recallscores.append(recall_score(y_test, ypred, average = 'macro'))
-        f1scores.append(f1_score(y_test, ypred, average="macro"))
+        accuracyscores.append(accuracy_score(y_val, ypred))
+        precisionscores.append(precision_score(y_val, ypred, average = 'macro'))
+        recallscores.append(recall_score(y_val, ypred, average = 'macro'))
+        f1scores.append(f1_score(y_val, ypred, average="macro"))
         print(f"For {model} with {i} features, selected features are: {sfs.get_feature_names_out()}")
     print(f"\n")
     plt.figure()
@@ -277,7 +324,7 @@ for named, model in models.items():
     plt.plot(x, f1scores, label = 'F1 scores',color="purple")
     plt.xlabel('number of features used')
     plt.xticks(x)
-    plt.title(f'Changes features used in {named}')
+    plt.title(f'Performances changes re: number of best features used in {named} determined by SFS')
     plt.legend()
     
 # SECOND FEATURE SELECTION - trees
@@ -301,7 +348,7 @@ importance_dataframe = pd.DataFrame({'Feature':dictionary.keys(),'Importance':di
 fig , ax = plt.subplots(figsize=(10,8))
 tree = FeatureImportances(model)
 tree.fit(X_train, y_train)
-#fig.savefig('Important features.png',dpi=300)
+fig.savefig('DT Important features.png',dpi=300)
 plt.show()
 
 #Data not scaled as scaled data performed worse except for KNN
@@ -318,16 +365,17 @@ for named, model in models.items():
         feature_names = list(dictionary.keys())[:i+1]
         best_X = X[feature_names]  
 
-        best_X_train, best_X_test, y_train, y_test = train_test_split(best_X, y, test_size=0.2, random_state = 40)
-        
+        best_X_train, best_X_test, best_y_train, best_y_test = train_test_split(best_X, y, test_size=0.2, random_state = 40)
+        best_X_train, best_X_val, best_y_train, best_y_val = train_test_split(best_X_train, best_y_train, test_size=0.2, random_state = 10)
+
         model.fit(best_X_train, y_train)
-        ypred = model.predict(best_X_test)
+        ypred = model.predict(best_X_val)
 
     #generating scores 
-        accuracyscores.append(accuracy_score(y_test, ypred))
-        precisionscores.append(precision_score(y_test, ypred, average = 'macro'))
-        recallscores.append(recall_score(y_test, ypred, average = 'macro'))
-        f1scores.append(f1_score(y_test, ypred, average="macro"))
+        accuracyscores.append(accuracy_score(best_y_val, ypred))
+        precisionscores.append(precision_score(best_y_val, ypred, average = 'macro'))
+        recallscores.append(recall_score(best_y_val, ypred, average = 'macro'))
+        f1scores.append(f1_score(best_y_val, ypred, average="macro"))
     
     plt.figure()
     x = range(1, len(dictionary.keys())+1)
@@ -341,21 +389,21 @@ for named, model in models.items():
     plt.legend()
     
 
-five_best_features = X[['histogram_mean', 'mean_value_of_short_term_variability', 'percentage_of_time_with_abnormal_long_term_variability', 
-    'abnormal_short_term_variability', 'accelerations']]
+# five_best_features = X[['histogram_mean', 'mean_value_of_short_term_variability', 'percentage_of_time_with_abnormal_long_term_variability', 
+#     'abnormal_short_term_variability', 'accelerations']]
 
-fivefeat_train, fivefeat_test, y_train, y_test = train_test_split(five_best_features, y, test_size = 0.2,random_state = 40)
-print(f"\n >>> Results for 5 best features, NO PCA")
-model_tests(fivefeat_train, fivefeat_test, y_train, y_test)
+# fivefeat_train, fivefeat_test, y_train, y_val = train_test_split(five_best_features, y_train, test_size = 0.2,random_state = 40)
+# print(f"\n >>> Results for 5 best features, NO PCA")
+# model_tests(fivefeat_train, fivefeat_test, y_train, y_test)
 
-ten_best_features = X[['histogram_mean', 'mean_value_of_short_term_variability', 'percentage_of_time_with_abnormal_long_term_variability', 
-   'abnormal_short_term_variability', 'accelerations', 	'prolongued_decelerations', 'histogram_median', 'histogram_mode','baseline value', 'fetal_movement']]
+# ten_best_features = X[['histogram_mean', 'mean_value_of_short_term_variability', 'percentage_of_time_with_abnormal_long_term_variability', 
+#    'abnormal_short_term_variability', 'accelerations', 	'prolongued_decelerations', 'histogram_median', 'histogram_mode','baseline value', 'fetal_movement']]
 
-tenfeat_train, tenfeat_test, y_train, y_test = train_test_split(ten_best_features,y, test_size = 0.2, random_state = 40)
+# tenfeat_train, tenfeat_test, y_train, y_test = train_test_split(ten_best_features,y, test_size = 0.2, random_state = 40)
 
-print(f"\n >>> Results for 10 best features, NO PCA")
-model_tests(tenfeat_train, tenfeat_test, y_train, y_test)
-# Top 10 features better than 5 feature
+# print(f"\n >>> Results for 10 best features, NO PCA")
+# model_tests(tenfeat_train, tenfeat_test, y_train, y_test)
+# # Top 10 features better than 5 feature
 
 #FEATURE SELECTION USING RF
 
@@ -374,28 +422,28 @@ rf_importance_dataframe = pd.DataFrame({"Feature names": dictionary.keys(),'Feat
 fig , ax = plt.subplots(figsize=(10,8))
 tree = FeatureImportances(rfc)
 tree.fit(X_train, y_train)
-#fig.savefig('Random forest.png',dpi=300)
+fig.savefig('Random forest importances.png',dpi=300)
 plt.show()
 
 #select the five best features
-rf_5best_features = X[['abnormal_short_term_variability', 'percentage_of_time_with_abnormal_long_term_variability', 
-   'histogram_mean', 'histogram_median','accelerations']]
+# rf_5best_features = X[['abnormal_short_term_variability', 'percentage_of_time_with_abnormal_long_term_variability', 
+#    'histogram_mean', 'histogram_median','accelerations']]
 
-#split new dataset into training and testing sets
-rf_5besttrain, rf_5besttest, y_train, y_test = train_test_split(rf_5best_features,y, test_size = 0.2, shuffle = True, random_state = 40)
+# #split new dataset into training and testing sets
+# rf_5besttrain, rf_5besttest, y_train, y_test = train_test_split(rf_5best_features,y, test_size = 0.2, shuffle = True, random_state = 40)
 
-print(f"\n>>> Results using RF's best 5 features, No PCA")
-model_tests(rf_5besttrain, rf_5besttest, y_train, y_test)
-#DTC slightly better with DTC's top 10 features worse than DTC top 5
+# print(f"\n>>> Results using RF's best 5 features, No PCA")
+# model_tests(rf_5besttrain, rf_5besttest, y_train, y_test)
+# #DTC slightly better with DTC's top 10 features worse than DTC top 5
 
-rf_10best_features = X[['abnormal_short_term_variability', 'percentage_of_time_with_abnormal_long_term_variability', 
-   'histogram_mean', 'histogram_median','accelerations', 'mean_value_of_short_term_variability', 'mean_value_of_long_term_variability', 'histogram_mode','baseline value','prolongued_decelerations']]
+# rf_10best_features = X[['abnormal_short_term_variability', 'percentage_of_time_with_abnormal_long_term_variability', 
+#    'histogram_mean', 'histogram_median','accelerations', 'mean_value_of_short_term_variability', 'mean_value_of_long_term_variability', 'histogram_mode','baseline value','prolongued_decelerations']]
 
-#split new dataset into training and testing sets
-rf_10besttrain, rf_10besttest, y_train, y_test = train_test_split(rf_10best_features,y, test_size = 0.2, shuffle = True, random_state = 40)
+# #split new dataset into training and testing sets
+# rf_10besttrain, rf_10besttest, y_train, y_test = train_test_split(rf_10best_features,y, test_size = 0.2, shuffle = True, random_state = 40)
 
-print(f"\n>>> Results using RF's best 10 features, No PCA")
-model_tests(rf_10besttrain, rf_10besttest, y_train, y_test)
+# print(f"\n>>> Results using RF's best 10 features, No PCA")
+# model_tests(rf_10besttrain, rf_10besttest, y_train, y_test)
 
 #RFR top 10 better for KNN, GNB, similar for DTC except ROC and slightly loweer than top 10 from DTC importances
 
@@ -412,15 +460,16 @@ for named, model in models.items():
         best_X = X[feature_names]  
 
         best_X_train, best_X_test, y_train, y_test = train_test_split(best_X, y, test_size=0.2, random_state = 40)
-        
+        best_X_train, best_X_val, y_train, y_val = train_test_split(best_X_train, y_train, test_size=0.2, random_state = 10)
+
         model.fit(best_X_train, y_train)
-        ypred = model.predict(best_X_test)
+        ypred = model.predict(best_X_val)
 
     #generating scores 
-        accuracyscores.append(accuracy_score(y_test, ypred))
-        precisionscores.append(precision_score(y_test, ypred, average = 'macro'))
-        recallscores.append(recall_score(y_test, ypred, average = 'macro'))
-        f1scores.append(f1_score(y_test, ypred, average="macro"))
+        accuracyscores.append(accuracy_score(y_val, ypred))
+        precisionscores.append(precision_score(y_val, ypred, average = 'macro'))
+        recallscores.append(recall_score(y_val, ypred, average = 'macro'))
+        f1scores.append(f1_score(y_val, ypred, average="macro"))
     
     plt.figure()
     x = range(1, len(dictionary.keys())+1)
@@ -434,7 +483,6 @@ for named, model in models.items():
     plt.legend()
 
 
-
 # Agreed preprocessing step
 
 def preprocess (data):
@@ -444,7 +492,7 @@ def preprocess (data):
     y = data['fetal_health'] 
 
 
-    OS = RandomOverSampler(sampling_strategy={2:1655, 3:1655}, random_state=40)
+    OS = RandomOverSampler(sampling_strategy="auto", random_state=40)
     X,y = OS.fit_resample(X,y)
 
 
@@ -452,6 +500,7 @@ def preprocess (data):
     targets = y
 
     X_train, X_test, y_train, y_test = train_test_split(X,y, test_size = 0.2, random_state=10)
+    
     
     #instantiate scaler
     scaler = RobustScaler()
@@ -489,6 +538,7 @@ for k in range(max_k):
     valacc.append(scores['test_score'].mean())
 
 #we can visualise this output in a graph
+plt.figure()
 x = range(1, max_k+1)
 plt.plot(x, trainacc, label='Training accuracy')
 plt.plot(x, valacc, label='Validation accuracy')
@@ -505,25 +555,29 @@ p = [1,2]
 
 params_knn = dict(n_neighbors=n_neighbors, weights=weights, leaf_size=leaf_size, p=p)
 
-knn_grid_search = GridSearchCV(estimator = KNeighborsClassifier(), param_grid = params_knn, scoring = 'accuracy')
+knn_grid_search = GridSearchCV(estimator = KNeighborsClassifier(), param_grid = params_knn, scoring = 'accuracy', return_train_score=True, cv=5)
 knn_grid_search.fit(X_train, y_train)
-knn_y_pred = knn_grid_search.predict(X_test)
+
+#knn_results = pd.DataFrame(data=knn_grid_search.cv_results_, columns=knn.grid_search.cv_results_.keys())
 
 print(knn_grid_search.best_params_)
 print(f"\n >>> Results for optimised KNN")
+best_knn = KNeighborsClassifier(leaf_size=1, n_neighbors=1, p=1, weights="uniform")
+best_knn.fit(X_train, y_train)
+knn_y_pred = best_knn.predict(X_test)
 
-accuracy = round((accuracy_score(y_test, knn_y_pred)),2)
-precision = round((precision_score(y_test, knn_y_pred, average="weighted")),2)
-recall = round((recall_score(y_test, knn_y_pred, average="weighted")),2)
-f1score = round((f1_score(y_test, knn_y_pred, average="weighted")),2)
+accuracy = round((accuracy_score(y_test, knn_y_pred)),3)
+precision = round((precision_score(y_test, knn_y_pred, average="macro")),3)
+recall = round((recall_score(y_test, knn_y_pred, average="macro")),3)
+f1score = round((f1_score(y_test, knn_y_pred, average="macro")),3)
     
-print(f"Accuracy for {named}: {accuracy}")
-print(f"Weighted precision for {named}: {precision}")
-print(f"Weighted Recall for {named}: {recall}")
-print(f"Weighted F1 score for {named}: {f1score}")
+print(f"Accuracy for KNN: {accuracy}")
+print(f"Weighted precision for KNN: {precision}")
+print(f"Weighted Recall for KNN: {recall}")
+print(f"Weighted F1 score for KNN: {f1score}")
 
-class_report = classification_report(y_test, ypred, labels=[1,2,3], target_names=["Normal", "Suspect", "Pathological"])
-print(f"Classification report by class for {named}")
+class_report = classification_report(y_test, knn_y_pred, labels=[1,2,3], target_names=["Normal", "Suspect", "Pathological"], digits=3)
+print(f"Classification report by class for KNN")
 print(class_report)
 
 print("--------------------")
@@ -535,7 +589,7 @@ params_gnb= {"var_smoothing":[1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1e
 
 #grid search was used to tune the hyperparameters
 
-gnb_grid_search=GridSearchCV(estimator=GaussianNB().fit(X_train, y_train),param_grid=params_gnb,scoring='accuracy',verbose=1, cv=3, error_score='raise')
+gnb_grid_search=GridSearchCV(estimator=GaussianNB().fit(X_train, y_train),param_grid=params_gnb,scoring='accuracy',verbose=1, cv=5, return_train_score=True, error_score='raise')
 #fit gridsearch to model
 gnb_grid_search.fit(X_train,y_train)
 #find the best var_smoothing
@@ -547,18 +601,18 @@ best_gnb_model=best_gnb.fit(X_train, y_train)
 gnb_pred= best_gnb_model.predict(X_test)
 
 print(f"\n -------------------\nResults for optimised GNB")
-accuracy = round((accuracy_score(y_test, gnb_pred)),2)
-precision = round((precision_score(y_test, gnb_pred, average="weighted")),2)
-recall = round((recall_score(y_test, gnb_pred, average="weighted")),2)
-f1score = round((f1_score(y_test, gnb_pred, average="weighted")),2)
+accuracy = round((accuracy_score(y_test, gnb_pred)),3)
+precision = round((precision_score(y_test, gnb_pred, average="macro")),3)
+recall = round((recall_score(y_test, gnb_pred, average="macro")),3)
+f1score = round((f1_score(y_test, gnb_pred, average="macro")),3)
     
-print(f"Accuracy for {named}: {accuracy}")
-print(f"Weighted precision for {named}: {precision}")
-print(f"Weighted Recall for {named}: {recall}")
-print(f"Weighted F1 score for {named}: {f1score}")
+print(f"Accuracy for GNB: {accuracy}")
+print(f"Macro precision for GNB: {precision}")
+print(f"Macro Recall for GNB: {recall}")
+print(f"Macro F1 score for GNB: {f1score}")
 
-class_report = classification_report(y_test, ypred, labels=[1,2,3], target_names=["Normal", "Suspect", "Pathological"])
-print(f"Classification report by class for {named}")
+class_report = classification_report(y_test, gnb_pred, labels=[1,2,3], target_names=["Normal", "Suspect", "Pathological"], digits=3)
+print(f"Classification report by class for GNB")
 print(class_report)
 
 # print(f"Accuracy for tuned GNB model : {accuracy_score (y_test, best_y_pred)}") 
@@ -577,41 +631,41 @@ rf = RandomForestClassifier(random_state=10)
 # use iterable parameters, else it gave me an error
 
 rf_params = {
-    'min_samples_split': [1,2,3,4],
+    'min_samples_split': [2,3],
     'min_samples_leaf': [1,2,3],
-    'min_impurity_decrease': [0.0,0.1,0.2,0.3,0.4,0.5],
+    'min_impurity_decrease': [0.0,0.2],
     'max_features':["sqrt","log2"],
-    'n_estimators': [25, 50, 100],
-    'criterion': ["gini","entropy","log_loss"],
-    'max_samples':[0.5,1.0],
+    'n_estimators': [100,200],
+    'criterion': ["gini","entropy"],
+    'max_samples':[0.5,1.0]
     
 }
 
 rf_grid_search = GridSearchCV(estimator=rf, 
                            param_grid=rf_params, 
-                           cv=3, n_jobs=-1, verbose=1, scoring = "accuracy")
+                           cv=5, verbose=1, scoring = "accuracy", return_train_score=True)
 
 rf_grid_search.fit(X_train, y_train)
 print("Best RF parameters:", rf_grid_search.best_params_)
 
-rf_model= RandomForestClassifier(min_impurity_decrease = 0.0, min_samples_leaf = 1,random_state = 10, min_samples_split= 3)
-rf_model.fit(X_train, y_train)
-rf_pred = rf_model.predict(X_test)
+best_rf= RandomForestClassifier(min_impurity_decrease = 0.0, min_samples_leaf = 1,random_state = 10, min_samples_split= 2, max_samples=1.0, criterion="gini",max_features="sqrt", n_estimators=100)
+best_rf.fit(X_train, y_train)
+rf_pred = best_rf.predict(X_test)
 #pred_y
  
 print("----------\nRF final results")
-accuracy = round((accuracy_score(y_test, rf_pred)),2)
-precision = round((precision_score(y_test, rf_pred, average="weighted")),2)
-recall = round((recall_score(y_test, rf_pred, average="weighted")),2)
-f1score = round((f1_score(y_test, rf_pred, average="weighted")),2)
+accuracy = round((accuracy_score(y_test, rf_pred)),3)
+precision = round((precision_score(y_test, rf_pred, average="macro")),3)
+recall = round((recall_score(y_test, rf_pred, average="macro")),3)
+f1score = round((f1_score(y_test, rf_pred, average="macro")),3)
     
-print(f"Accuracy for {named}: {accuracy}")
-print(f"Weighted precision for {named}: {precision}")
-print(f"Weighted Recall for {named}: {recall}")
-print(f"Weighted F1 score for {named}: {f1score}")
+print(f"Accuracy for RF: {accuracy}")
+print(f"Macro precision for RF: {precision}")
+print(f"Macro Recall for RF: {recall}")
+print(f"Macro F1 score for RF: {f1score}")
 
-class_report = classification_report(y_test, ypred, labels=[1,2,3], target_names=["Normal", "Suspect", "Pathological"])
-print(f"Classification report by class for {named}")
+class_report = classification_report(y_test, rf_pred, labels=[1,2,3], target_names=["Normal", "Suspect", "Pathological"], digits=3)
+print(f"Classification report by class for RF")
 print(class_report)
 
 #Cross validation to compare model performances
@@ -624,12 +678,12 @@ cv = KFold(n_splits=10, shuffle=True)
 for train_index, test_index in cv.split(X):
     X_train, X_test = X[train_index], X[test_index]
     y_train, y_test = y[train_index], y[test_index]
-    knn_grid_search.fit(X_train, y_train)
-    knn_y_pred = knn_grid_search.predict(X_test)
-    best_gnb_model=best_gnb.fit(X_train, y_train)
-    gnb_pred= best_gnb_model.predict(X_test)
-    rf_model.fit(X_train, y_train)
-    rf_pred = rf_model.predict(X_test)
+    best_knn.fit(X_train, y_train)
+    knn_y_pred = best_knn.predict(X_test)
+    best_gnb.fit(X_train, y_train)
+    gnb_pred= best_gnb.predict(X_test)
+    best_rf.fit(X_train, y_train)
+    rf_pred = best_rf.predict(X_test)
     scoresknn.append(accuracy_score(y_test,knn_y_pred))
     scoresgnb.append(accuracy_score(y_test,gnb_pred))
     scoresrf.append(accuracy_score(y_test, rf_pred))
@@ -639,5 +693,11 @@ print(f'GNB: mean={np.mean(scoresgnb)},sd={np.std(scoresgnb)}')
 print(f'RF: mean={np.mean(scoresrf)}, sd={np.std(scoresrf)}')
 
 box_plot_data=[scoresknn,scoresgnb,scoresrf]
+plt.figure()
 plt.boxplot(box_plot_data,labels=['KNN','GNB',"RF"])
+plt.ylabel("accuracy")
+plt.title("Statistical validation of KNN, GNB and RF")
 plt.show()
+plt.savefig("stat_val.png")
+
+plt.bar(["Normal","Suspect","Pathological"], data.fetal_health.value_counts())
